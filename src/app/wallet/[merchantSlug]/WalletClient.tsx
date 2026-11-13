@@ -16,7 +16,7 @@ import {
   ArrowLeft,
 } from 'lucide-react';
 import Link from 'next/link';
-import { formatPhoneForDisplay } from '@/lib/fonnte';
+import { formatPhoneForDisplay } from '@/lib/format';
 
 interface RewardItem {
   id: string;

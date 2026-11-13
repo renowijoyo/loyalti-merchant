@@ -1,19 +1,17 @@
 {
-  "name": "loyalti",
+  "name": "loyalti-merchant",
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -p 3000",
     "build": "next build",
-    "start": "next start",
+    "start": "next start -p 3000",
     "lint": "eslint"
   },
   "dependencies": {
-    "@prisma/client": "^6.19.3",
     "canvas-confetti": "^1.9.4",
     "lucide-react": "^1.62.0",
     "next": "16.4.3",
-    "prisma": "^6.19.3",
     "qrcode": "^1.5.4",
     "react": "19.3.0",
     "react-dom": "19.3.0"

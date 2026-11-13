@@ -1,5 +1,7 @@
 import type { NextConfig } from "next";
 
+const apiUrl = process.env.API_URL || "http://localhost:3001";
+
 const nextConfig: NextConfig = {
   turbopack: {
     rules: {
@@ -8,6 +10,14 @@ const nextConfig: NextConfig = {
         as: "*.css",
       },
     },
+  },
+  async rewrites() {
+    return [
+      {
+        source: "/api/:path*",
+        destination: `${apiUrl}/api/:path*`,
+      },
+    ];
   },
 };
 

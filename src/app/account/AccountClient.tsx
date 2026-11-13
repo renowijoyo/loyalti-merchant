@@ -23,7 +23,7 @@ import {
   Wallet,
   AlertCircle,
 } from 'lucide-react';
-import type { CustomerAccountOverview } from '@/lib/customer-auth';
+import type { CustomerAccountOverview } from '@/lib/types';
 
 function formatPhoneDisplay(phone: string): string {
   let clean = phone.replace(/[^0-9]/g, '');

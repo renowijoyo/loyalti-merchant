@@ -1,7 +1,9 @@
 import { Metadata } from 'next';
-import ClaimClient from './ClaimClient';
-import prisma from '@/lib/prisma';
 import { notFound } from 'next/navigation';
+import { fetchApi } from '@/lib/api';
+import ClaimClient from './ClaimClient';
+
+export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
   title: 'Klaim Stempel Loyalitas | Loyalti',
@@ -15,53 +17,43 @@ export default async function ClaimPage({
 }) {
   const { token } = await params;
 
-  const claimToken = await prisma.claimToken.findUnique({
-    where: { token },
-    include: {
-      merchant: true,
-      pointSystem: true,
-    },
-  });
-
-  if (!claimToken) {
+  const res = await fetchApi(`/api/claim/${encodeURIComponent(token)}`);
+  if (res.status === 404) {
     notFound();
   }
+  if (!res.ok) {
+    throw new Error('Gagal memuat info stempel dari Loyalti API');
+  }
 
-  // Fetch active rewards
-  const rewards = await prisma.reward.findMany({
-    where: {
-      merchantId: claimToken.merchantId,
-      isActive: true,
-      endAt: { gte: new Date() },
-    },
-    orderBy: { pointsCost: 'asc' },
-    take: 3,
-  });
-
-  const isExpired = new Date() > claimToken.expiresAt;
+  const data = await res.json();
 
   return (
     <ClaimClient
       token={token}
       initialTokenData={{
-        points: claimToken.points,
-        billReference: claimToken.billReference,
-        status: claimToken.status === 'PENDING' && isExpired ? 'EXPIRED' : claimToken.status,
-        claimedByPhone: claimToken.claimedByPhone,
-        expiresAt: claimToken.expiresAt.toISOString(),
+        points: data.points,
+        billReference: data.billReference,
+        status: data.status,
+        claimedByPhone: data.claimedByPhone ?? null,
+        expiresAt: data.expiresAt,
         merchant: {
-          name: claimToken.merchant.name,
-          slug: claimToken.merchant.slug,
-          logoUrl: claimToken.merchant.logoUrl,
-          primaryColor: claimToken.merchant.primaryColor,
-          description: claimToken.merchant.description,
+          name: data.merchant.name,
+          slug: data.merchant.slug,
+          logoUrl: data.merchant.logoUrl,
+          primaryColor: data.merchant.primaryColor,
+          description: data.merchant.description,
         },
         pointSystem: {
-          name: claimToken.pointSystem.name,
-          icon: claimToken.pointSystem.icon,
-          pointValidityDays: claimToken.pointSystem.pointValidityDays,
+          name: data.pointSystem.name,
+          icon: data.pointSystem.icon,
+          pointValidityDays: data.pointSystem.pointValidityDays,
         },
-        rewards: rewards.map((r) => ({
+        rewards: (data.rewards || []).map((r: {
+          id: string;
+          title: string;
+          description: string | null;
+          pointsCost: number;
+        }) => ({
           id: r.id,
           title: r.title,
           description: r.description,

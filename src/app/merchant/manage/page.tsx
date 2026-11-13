@@ -1,34 +1,79 @@
 import { Metadata } from 'next';
-import prisma from '@/lib/prisma';
+import { fetchApi } from '@/lib/api';
 import ManageClient from './ManageClient';
 
+export const dynamic = 'force-dynamic';
+
 export const metadata: Metadata = {
-  title: 'Admin Mode - Manajemen Poin & Hadiah | Loyalti',
-  description: 'Mode Admin untuk kelola promosi, riwayat transaksi stempel, katalog reward, dan konfigurasi toko.',
+  title: 'Merchant Portal - Manajemen Poin & Hadiah | Loyalti',
+  description: 'Portal Merchant untuk kelola promosi, riwayat transaksi stempel, katalog reward, dan konfigurasi toko.',
 };
 
+interface ApiMerchant {
+  id: string;
+  name: string;
+  slug: string;
+  logoUrl: string | null;
+  primaryColor: string;
+  fonnteToken: string | null;
+  qrExpiryMinutes: number | null;
+  apiKey: string | null;
+  description: string | null;
+  promotions: Array<{
+    id: string;
+    title: string;
+    description: string | null;
+    startAt: string;
+    endAt: string;
+    isActive: boolean;
+  }>;
+  pointSystems: Array<{
+    id: string;
+    name: string;
+    description: string | null;
+    icon: string;
+    ruleType: string;
+    pointsPerUnit: number;
+    amountPerPoint: number;
+    minSpendAmount: number | null;
+    maxPointsPerTx: number | null;
+    pointValidityDays: number;
+    startAt: string;
+    endAt: string;
+    isActive: boolean;
+  }>;
+  rewards: Array<{
+    id: string;
+    title: string;
+    description: string | null;
+    pointsCost: number;
+    quota: number | null;
+    redeemedCount: number;
+    voucherValidityDays: number;
+    startAt: string;
+    endAt: string;
+    isActive: boolean;
+    pointSystemId: string | null;
+  }>;
+  _count: {
+    wallets: number;
+    claimTokens: number;
+    redemptions: number;
+  };
+}
+
 export default async function ManagePage() {
-  const merchants = await prisma.merchant.findMany({
-    include: {
-      promotions: {
-        orderBy: { createdAt: 'desc' },
-      },
-      pointSystems: {
-        orderBy: { createdAt: 'desc' },
-      },
-      rewards: {
-        orderBy: { pointsCost: 'asc' },
-      },
-      _count: {
-        select: {
-          wallets: true,
-          claimTokens: true,
-          redemptions: true,
-        },
-      },
-    },
-    orderBy: { createdAt: 'asc' },
-  });
+  let merchants: ApiMerchant[] = [];
+
+  try {
+    const res = await fetchApi('/api/merchants');
+    if (res.ok) {
+      const data = await res.json();
+      merchants = data.merchants || [];
+    }
+  } catch {
+    // API offline
+  }
 
   return (
     <ManageClient
@@ -46,8 +91,8 @@ export default async function ManagePage() {
           id: p.id,
           title: p.title,
           description: p.description,
-          startAt: p.startAt.toISOString(),
-          endAt: p.endAt.toISOString(),
+          startAt: p.startAt,
+          endAt: p.endAt,
           isActive: p.isActive,
         })),
         pointSystems: m.pointSystems.map((ps) => ({
@@ -61,8 +106,8 @@ export default async function ManagePage() {
           minSpendAmount: ps.minSpendAmount,
           maxPointsPerTx: ps.maxPointsPerTx,
           pointValidityDays: ps.pointValidityDays,
-          startAt: ps.startAt.toISOString(),
-          endAt: ps.endAt.toISOString(),
+          startAt: ps.startAt,
+          endAt: ps.endAt,
           isActive: ps.isActive,
         })),
         rewards: m.rewards.map((r) => ({
@@ -73,8 +118,8 @@ export default async function ManagePage() {
           quota: r.quota,
           redeemedCount: r.redeemedCount,
           voucherValidityDays: r.voucherValidityDays,
-          startAt: r.startAt.toISOString(),
-          endAt: r.endAt.toISOString(),
+          startAt: r.startAt,
+          endAt: r.endAt,
           isActive: r.isActive,
           pointSystemId: r.pointSystemId,
         })),

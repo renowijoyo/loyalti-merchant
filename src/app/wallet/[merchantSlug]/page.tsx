@@ -1,13 +1,58 @@
 import { Metadata } from 'next';
-import prisma from '@/lib/prisma';
-import WalletClient from './WalletClient';
 import { notFound } from 'next/navigation';
-import { normalizePhoneNumber } from '@/lib/fonnte';
+import { fetchApi } from '@/lib/api';
+import WalletClient from './WalletClient';
+
+export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
   title: 'Kartu Stempel & Voucher | Loyalti',
   description: 'Cek saldo stempel loyalitas dan tukarkan voucher hadiah.',
 };
+
+interface ApiMerchant {
+  id: string;
+  name: string;
+  slug: string;
+  logoUrl: string | null;
+  primaryColor: string;
+  description: string | null;
+  promotions: Array<{
+    id: string;
+    title: string;
+    description: string | null;
+    endAt: string;
+  }>;
+  rewards: Array<{
+    id: string;
+    title: string;
+    description: string | null;
+    pointsCost: number;
+    voucherValidityDays: number;
+    quota: number | null;
+    redeemedCount: number;
+  }>;
+}
+
+interface ApiBatch {
+  id: string;
+  pointsRemaining: number;
+  expiresAt: string | null;
+  notes: string | null;
+  createdAt: string;
+}
+
+interface ApiRedemption {
+  id: string;
+  voucherCode: string;
+  status: string;
+  expiresAt: string;
+  createdAt: string;
+  pointsSpent: number;
+  reward: {
+    title: string;
+  };
+}
 
 export default async function WalletPage({
   params,
@@ -19,75 +64,26 @@ export default async function WalletPage({
   const { merchantSlug } = await params;
   const { phone: rawPhone } = await searchParams;
 
-  const merchant = await prisma.merchant.findUnique({
-    where: { slug: merchantSlug },
-    include: {
-      promotions: {
-        where: {
-          isActive: true,
-          endAt: { gte: new Date() },
-        },
-      },
-      pointSystems: {
-        where: { isActive: true },
-      },
-      rewards: {
-        where: {
-          isActive: true,
-          endAt: { gte: new Date() },
-        },
-        orderBy: { pointsCost: 'asc' },
-      },
-    },
-  });
+  const query = rawPhone ? `?phone=${encodeURIComponent(rawPhone)}` : '';
+  const res = await fetchApi(`/api/wallet/${encodeURIComponent(merchantSlug)}${query}`);
 
-  if (!merchant) {
+  if (res.status === 404) {
     notFound();
   }
 
-  let customer = null;
-  let wallet = null;
-  let batches: any[] = [];
-  let redemptions: any[] = [];
-
-  if (rawPhone) {
-    const phone = normalizePhoneNumber(rawPhone);
-    customer = await prisma.customer.findUnique({
-      where: { phone },
-    });
-
-    if (customer) {
-      wallet = await prisma.customerWallet.findUnique({
-        where: {
-          customerId_merchantId: {
-            customerId: customer.id,
-            merchantId: merchant.id,
-          },
-        },
-      });
-
-      batches = await prisma.pointBatch.findMany({
-        where: {
-          customerId: customer.id,
-          merchantId: merchant.id,
-          status: 'ACTIVE',
-          pointsRemaining: { gt: 0 },
-        },
-        orderBy: { expiresAt: 'asc' },
-      });
-
-      redemptions = await prisma.redemption.findMany({
-        where: {
-          customerId: customer.id,
-          merchantId: merchant.id,
-        },
-        include: {
-          reward: true,
-        },
-        orderBy: { createdAt: 'desc' },
-      });
-    }
+  if (!res.ok) {
+    throw new Error('Gagal memuat data kartu loyalitas dari Loyalti API');
   }
+
+  const data: {
+    merchant: ApiMerchant;
+    wallet: { totalPoints: number; lifetimePoints: number } | null;
+    customer: { phone: string; name?: string | null } | null;
+    batches: ApiBatch[];
+    redemptions: ApiRedemption[];
+  } = await res.json();
+
+  const { merchant, wallet, customer, batches = [], redemptions = [] } = data;
 
   return (
     <WalletClient
@@ -102,7 +98,7 @@ export default async function WalletPage({
           id: p.id,
           title: p.title,
           description: p.description,
-          endAt: p.endAt.toISOString(),
+          endAt: p.endAt,
         })),
         rewards: merchant.rewards.map((r) => ({
           id: r.id,
@@ -115,7 +111,9 @@ export default async function WalletPage({
         })),
       }}
       initialPhone={rawPhone || ''}
-      initialCustomer={customer ? { phone: customer.phone, name: customer.name } : null}
+      initialCustomer={
+        customer ? { phone: customer.phone, name: customer.name ?? null } : null
+      }
       initialWallet={
         wallet
           ? { totalPoints: wallet.totalPoints, lifetimePoints: wallet.lifetimePoints }
@@ -124,16 +122,16 @@ export default async function WalletPage({
       initialBatches={batches.map((b) => ({
         id: b.id,
         pointsRemaining: b.pointsRemaining,
-        expiresAt: b.expiresAt ? b.expiresAt.toISOString() : null,
+        expiresAt: b.expiresAt,
         notes: b.notes,
-        createdAt: b.createdAt.toISOString(),
+        createdAt: b.createdAt,
       }))}
       initialRedemptions={redemptions.map((rd) => ({
         id: rd.id,
         voucherCode: rd.voucherCode,
         status: rd.status,
-        expiresAt: rd.expiresAt.toISOString(),
-        createdAt: rd.createdAt.toISOString(),
+        expiresAt: rd.expiresAt,
+        createdAt: rd.createdAt,
         rewardTitle: rd.reward.title,
         pointsSpent: rd.pointsSpent,
       }))}

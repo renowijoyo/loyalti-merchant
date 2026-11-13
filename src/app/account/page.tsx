@@ -1,8 +1,6 @@
 import { Metadata } from 'next';
-import {
-  getCustomerAccountOverview,
-  getCustomerSession,
-} from '@/lib/customer-auth';
+import { fetchApi } from '@/lib/api';
+import type { CustomerAccountOverview } from '@/lib/types';
 import AccountClient from './AccountClient';
 
 export const dynamic = 'force-dynamic';
@@ -14,10 +12,17 @@ export const metadata: Metadata = {
 };
 
 export default async function AccountPage() {
-  const session = await getCustomerSession();
-  const initialOverview = session
-    ? await getCustomerAccountOverview(session.account.id)
-    : null;
+  let initialOverview: CustomerAccountOverview | null = null;
+
+  try {
+    const res = await fetchApi('/api/customer/me');
+    if (res.ok) {
+      const data = await res.json();
+      initialOverview = data.overview ?? null;
+    }
+  } catch {
+    // API offline or unauthenticated
+  }
 
   return <AccountClient initialOverview={initialOverview} />;
 }
